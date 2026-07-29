@@ -10,6 +10,7 @@
 #include <windows.h>
 #include <assert.h>
 #include <synchapi.h>
+#include <bit>
 
 #undef ERROR
 #undef GetMessage
@@ -52,40 +53,56 @@ inline int nanosleep(const timespec* req, timespec* rem)
     return 0;
 }
 
-inline uint8_t clz(uint64_t n)
+inline constexpr uint8_t clz(uint64_t n)
 {
-    unsigned long index = 0;
-    if (_BitScanReverse64(&index, n))
-	    return 64 - index - 1;
-    return 0;
+    if (std::is_constant_evaluated()) {
+        return std::countl_zero(n);
+    } else {
+        unsigned long index = 0;
+        if (_BitScanReverse(&index, n))
+            return 64 - index - 1;
+        return 0;
+    }
 }
 
-inline uint8_t clz(uint32_t n)
+inline constexpr uint8_t clz(uint32_t n)
 {
-    unsigned long index = 0;
-    if (_BitScanReverse(&index, n))
-	    return 32 - index - 1;
-    return 0;
+    if (std::is_constant_evaluated()) {
+        return std::countl_zero(n);
+    } else {
+        unsigned long index = 0;
+        if (_BitScanReverse(&index, n))
+            return 32 - index - 1;
+        return 0;
+    }
 }
 
-inline uint8_t clz(uint16_t n) { return clz(static_cast<uint32_t>(n)) - 16; }
-inline uint8_t clz(uint8_t n)  { return clz(static_cast<uint32_t>(n)) - 24; }
+inline constexpr uint8_t clz(uint16_t n) { return clz(static_cast<uint32_t>(n)) - 16; }
+inline constexpr uint8_t clz(uint8_t n)  { return clz(static_cast<uint32_t>(n)) - 24; }
 
 template<typename U, std::enable_if_t<std::is_unsigned<U>::value, bool> = true>
 inline uint8_t ffs(U n)
 { 
-    unsigned long index = 0;
-    if (_BitScanForward(&index, n))
-	    return index + 1;
-    return 0;
+    if (std::is_constant_evaluated()) {
+        return std::countr_zero(n);
+    } else {
+        unsigned long index = 0;
+        if (_BitScanForward(&index, n))
+            return index + 1;
+        return 0;
+    }
 }
 
 inline uint8_t ffs(uint64_t n)
 {
-    unsigned long index = 0;
-    if (_BitScanForward64(&index, n))
-	    return index + 1;
-    return 0;
+    if (std::is_constant_evaluated()) {
+        return std::countr_zero(n);
+    } else {
+        unsigned long index = 0;
+        if (_BitScanForward(&index, n))
+            return index + 1;
+        return 0;
+    }
 }
 
 #else
