@@ -1,5 +1,6 @@
 #ifndef _IN_CSP_CORE_PLATFORM_H
 #define _IN_CSP_CORE_PLATFORM_H
+#include <bit>
 #include <type_traits>
 #include <stdint.h>
 #include <time.h>
@@ -10,7 +11,6 @@
 #include <windows.h>
 #include <assert.h>
 #include <synchapi.h>
-#include <bit>
 
 #undef ERROR
 #undef GetMessage
@@ -48,61 +48,9 @@ inline tm * localtime_r( const time_t * timep, tm * result )
 inline int nanosleep(const timespec* req, timespec* rem)
 {
     assert(rem == nullptr);
-    int64_t millis = req->tv_sec * 1000 + req->tv_nsec * 1000000;
+    int64_t millis = req->tv_sec * 1000 + req->tv_nsec / 1000000;
     Sleep(millis);
     return 0;
-}
-
-inline constexpr uint8_t clz(uint64_t n)
-{
-    if (std::is_constant_evaluated()) {
-        return std::countl_zero(n);
-    } else {
-        unsigned long index = 0;
-        if (_BitScanReverse64(&index, n))
-            return 64 - index - 1;
-        return 0;
-    }
-}
-
-inline constexpr uint8_t clz(uint32_t n)
-{
-    if (std::is_constant_evaluated()) {
-        return std::countl_zero(n);
-    } else {
-        unsigned long index = 0;
-        if (_BitScanReverse(&index, n))
-            return 32 - index - 1;
-        return 0;
-    }
-}
-
-inline constexpr uint8_t clz(uint16_t n) { return clz(static_cast<uint32_t>(n)) - 16; }
-inline constexpr uint8_t clz(uint8_t n)  { return clz(static_cast<uint32_t>(n)) - 24; }
-
-template<typename U, std::enable_if_t<std::is_unsigned<U>::value, bool> = true>
-inline constexpr uint8_t ffs(U n)
-{ 
-    if (std::is_constant_evaluated()) {
-        return std::countr_zero(n);
-    } else {
-        unsigned long index = 0;
-        if (_BitScanForward(&index, n))
-            return index + 1;
-        return 0;
-    }
-}
-
-inline constexpr uint8_t ffs(uint64_t n)
-{
-    if (std::is_constant_evaluated()) {
-        return std::countr_zero(n);
-    } else {
-        unsigned long index = 0;
-        if (_BitScanForward64(&index, n))
-            return index + 1;
-        return 0;
-    }
 }
 
 #else
@@ -117,18 +65,13 @@ inline constexpr uint8_t ffs(uint64_t n)
 
 #define NO_INLINE  __attribute__ ((noinline))
 
-inline constexpr uint8_t clz(uint32_t n) { return __builtin_clz(n); }
-inline constexpr uint8_t clz(uint64_t n) { return __builtin_clzl(n); }
-
 // clz (count leading zeros) returns number of leading zeros before MSB (i.e. clz(00110..) = 2 )
-// __builtin_clz auto-promotes to 32-bits: need to subtract off extra leading zeros
-inline constexpr uint8_t clz(uint16_t n) { return clz(static_cast<uint32_t>(n)) - 16; }
-inline constexpr uint8_t clz(uint8_t n)  { return clz(static_cast<uint32_t>(n)) - 24; }
+template<typename U, std::enable_if_t<std::is_unsigned<U>::value, bool> = true>
+inline constexpr uint8_t clz( U n )        { return std::countl_zero(n); }
 
 // ffs (find first set) returns offset of first set bit (i.e. ffs(..0110) = 2 ), with ffs(0) = 0
 template<typename U, std::enable_if_t<std::is_unsigned<U>::value, bool> = true>
-inline constexpr uint8_t ffs( U n )        { return __builtin_ffs(n); }
-inline constexpr uint8_t ffs( uint64_t n ) { return __builtin_ffsl(n); }
+inline constexpr uint8_t ffs( U n )        { return n ? std::countr_zero(n) + 1 : 0; }
 
 #endif
 
