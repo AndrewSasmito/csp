@@ -48,7 +48,7 @@ inline tm * localtime_r( const time_t * timep, tm * result )
 inline int nanosleep(const timespec* req, timespec* rem)
 {
     assert(rem == nullptr);
-    int64_t millis = req->tv_sec * 1000 + req->tv_nsec / 1000000;
+    int64_t millis = req->tv_sec * 1000 + req->tv_nsec * 1000000;
     Sleep(millis);
     return 0;
 }
@@ -65,6 +65,8 @@ inline int nanosleep(const timespec* req, timespec* rem)
 
 #define NO_INLINE  __attribute__ ((noinline))
 
+#endif
+
 // clz (count leading zeros) returns number of leading zeros before MSB (i.e. clz(00110..) = 2 )
 template<typename U, std::enable_if_t<std::is_unsigned<U>::value, bool> = true>
 inline constexpr uint8_t clz( U n )        { return std::countl_zero(n); }
@@ -72,7 +74,5 @@ inline constexpr uint8_t clz( U n )        { return std::countl_zero(n); }
 // ffs (find first set) returns offset of first set bit (i.e. ffs(..0110) = 2 ), with ffs(0) = 0
 template<typename U, std::enable_if_t<std::is_unsigned<U>::value, bool> = true>
 inline constexpr uint8_t ffs( U n )        { return n ? std::countr_zero(n) + 1 : 0; }
-
-#endif
 
 #endif
