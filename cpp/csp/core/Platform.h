@@ -47,7 +47,7 @@ inline tm * localtime_r( const time_t * timep, tm * result )
 inline int nanosleep(const timespec* req, timespec* rem)
 {
     assert(rem == nullptr);
-    int64_t millis = req->tv_sec * 1000 + req->tv_nsec * 1000000;
+    int64_t millis = req->tv_sec * 1000 + req->tv_nsec / 1000000;
     Sleep(millis);
     return 0;
 }
