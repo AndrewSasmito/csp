@@ -8,8 +8,8 @@ class CsvAdapterManager:
         self,
         filename,
         time_column,
-        symbol_column="",
         delimiter=",",
+        symbol_column="",
         has_header=True,
         time_format=None,
     ):

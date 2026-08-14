@@ -145,7 +145,7 @@ void CsvInputAdapterManager::start(DateTime starttime, DateTime endtime) {
     return parts;
   };
 
-  // --- Parse header ---
+  // Parse header
   m_columnNames.clear();
   if (m_hasHeader) {
     std::string headerLine;
@@ -154,7 +154,7 @@ void CsvInputAdapterManager::start(DateTime starttime, DateTime endtime) {
     m_columnNames = splitLine(headerLine, m_delimiter);
   }
 
-  // --- Collect the set of columns any subscriber cares about ---
+  // Collect the set of columns any subscriber cares about
   std::set<std::string> neededColumns;
   bool needAllColumns = false;
 
@@ -185,7 +185,7 @@ void CsvInputAdapterManager::start(DateTime starttime, DateTime endtime) {
     for (const auto &name : m_columnNames)
       neededColumns.insert(name);
 
-  // --- Do column-name -> index mappings through setupProcessor ---
+  // Do column-name -> index mappings through setupProcessor
   std::optional<std::string> symbolColumnOpt;
   if (!m_symbolColumnName.empty())
     symbolColumnOpt = m_symbolColumnName;
@@ -281,7 +281,48 @@ void CsvInputAdapterManager::bindSubscriberDispatchers() {
       return;
     }
 
-    // Struct field_map: needs csp::Struct construction with per-field type
+    if (std::holds_alternative<DictionaryPtr>(sub.m_fieldMap)) {
+      auto *structType =
+          static_cast<const CspStructType *>(sub.m_adapter->dataType());
+
+      auto meta = structType->meta();
+
+      StructSubscription subscription;
+      subscription.m_adapter = sub.m_adapter;
+      subscription.m_structMeta = meta;
+
+      auto &fm = std::get<DictionaryPtr>(sub.m_fieldMap);
+
+      for (auto it = fm->begin(); it != fm->end(); ++it) {
+        const std::string csvColumn = it.key();
+        const std::string structField = it.value<std::string>();
+
+        auto col = colIndex.find(csvColumn);
+
+        CSP_TRUE_OR_THROW_RUNTIME(
+            col != colIndex.end(),
+            "Column '" << csvColumn << "' not found in CSV header");
+
+        auto field = meta->field(structField);
+
+        CSP_TRUE_OR_THROW_RUNTIME(
+            field,
+            "Field '" << structField << "' not found in struct");
+
+        size_t idx = col->second;
+
+        subscription.m_fieldSetters.push_back(
+            [idx, field](StructPtr &s,
+                         const std::vector<std::string_view> &cols) {
+              field->setValue<std::string>(
+                  s.get(),
+                  std::string(cols[idx]));
+            });
+      }
+
+      sub.m_structSubscription = std::move(subscription);
+      return;
+    }
   };
 
   for (auto &sub : m_subscribers)
