@@ -5,6 +5,7 @@
 #include <csp/engine/CspType.h>
 #include <csp/engine/Dictionary.h>
 #include <csp/engine/Struct.h>
+#include <array>
 #include <cstddef>
 #include <functional>
 #include <iterator>
@@ -18,24 +19,53 @@
 
 namespace csp::adapters::csv {
 
-// Parses exactly "YYYY-MM-DD HH::MM::SS"
-DateTime parseFixed_YmdHMS(std::string_view date) {
-  if (date.size() < 19)
-    CSP_THROW(ValueError, "Timestamp too short");
+// Build parser at runtime for extracting date time
+std::function<DateTime(std::string_view)>
+createParser(std::string_view format) {
 
-  auto d2 = [&](size_t i) {
-    return (date[i] - '0') * 10 + (date[i + 1] - '0');
+  constexpr std::array<std::string_view, 6> date_format = {"YYYY", "MM", "DD",
+                                                           "hh",   "mm", "ss"};
+
+  std::array<int, 6> date_indices;
+
+  for (int i = 0; i < 6; ++i) {
+    auto pos = format.find(date_format[i]);
+
+    date_indices[i] =
+        pos == std::string_view::npos ? -1 : static_cast<int>(pos);
+  }
+
+  return [date_indices](std::string_view date) -> DateTime {
+    std::array<int, 6> data = {
+        0, // year
+        0, // month
+        1, // day
+        0, // hour
+        0, // minute
+        0  // second
+    };
+
+    auto d2 = [&](int idx) {
+      return (date[idx] - '0') * 10 + (date[idx + 1] - '0');
+    };
+
+    auto d4 = [&](int idx) {
+      return (date[idx] - '0') * 1000 + (date[idx + 1] - '0') * 100 +
+             (date[idx + 2] - '0') * 10 + (date[idx + 3] - '0');
+    };
+
+    for (int i = 0; i < 6; ++i) {
+      if (date_indices[i] == -1)
+        continue;
+
+      if (i == 0)
+        data[i] = d4(date_indices[i]);
+      else
+        data[i] = d2(date_indices[i]);
+    }
+
+    return DateTime(data[0], data[1], data[2], data[3], data[4], data[5]);
   };
-
-  int year = d2(0) * 100 + d2(2);
-  int month = d2(5);
-  int day = d2(8);
-
-  int hour = d2(11);
-  int minute = d2(14);
-  int second = d2(17);
-
-  return DateTime(year, month, day, hour, minute, second);
 }
 
 CsvInputAdapterManager::CsvInputAdapterManager(csp::Engine *engine,
@@ -61,12 +91,10 @@ CsvInputAdapterManager::CsvInputAdapterManager(csp::Engine *engine,
   properties.tryGet("time_format", m_timeFormat);
 
   if (m_timeFormat.empty()) {
-    dateParser = parseFixed_YmdHMS;
-  } else if (m_timeFormat == "YYYY-MM-DD HH::MM::SS") {
-    dateParser = parseFixed_YmdHMS;
-  } else {
-    CSP_THROW(ValueError, "Time format not supported");
+    CSP_THROW(ValueError, "Time format must be provided");
   }
+
+  dateParser = createParser(m_timeFormat);
 }
 
 CsvInputAdapterManager::~CsvInputAdapterManager() = default;
@@ -299,24 +327,21 @@ void CsvInputAdapterManager::bindSubscriberDispatchers() {
 
         auto col = colIndex.find(csvColumn);
 
-        CSP_TRUE_OR_THROW_RUNTIME(
-            col != colIndex.end(),
-            "Column '" << csvColumn << "' not found in CSV header");
+        CSP_TRUE_OR_THROW_RUNTIME(col != colIndex.end(),
+                                  "Column '" << csvColumn
+                                             << "' not found in CSV header");
 
         auto field = meta->field(structField);
 
-        CSP_TRUE_OR_THROW_RUNTIME(
-            field,
-            "Field '" << structField << "' not found in struct");
+        CSP_TRUE_OR_THROW_RUNTIME(field, "Field '" << structField
+                                                   << "' not found in struct");
 
         size_t idx = col->second;
 
         subscription.m_fieldSetters.push_back(
             [idx, field](StructPtr &s,
                          const std::vector<std::string_view> &cols) {
-              field->setValue<std::string>(
-                  s.get(),
-                  std::string(cols[idx]));
+              field->setValue<std::string>(s.get(), std::string(cols[idx]));
             });
       }
 

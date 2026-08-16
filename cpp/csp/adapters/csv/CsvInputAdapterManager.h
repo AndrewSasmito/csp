@@ -16,14 +16,6 @@
 
 namespace csp::adapters::csv {
 
-// Manages all csv input adapters for a single engine run.
-//
-// Lifecycle:
-//   1. Registration:  getInputAdapter() called per subscription (before engine
-//   starts)
-//   2. start():       create processors → wire adapters → read first row
-//   3. processNextSimTimeSlice():  skip/dispatch loop per engine tick
-//   4. stop():        tear down all state
 class CsvInputAdapterManager final : public csp::AdapterManager {
 public:
   CsvInputAdapterManager(csp::Engine *engine, const Dictionary &properties);
@@ -80,7 +72,7 @@ private:
   // populated.
   void bindSubscriberDispatchers();
 
-  using dateTimeParserfn = DateTime (*)(std::string_view);
+  using dateTimeParserfn = std::function<DateTime(std::string_view)>;
 
   // Registration-phase state (populated by getInputAdapter before start)
   std::vector<Subscriber> m_subscribers;

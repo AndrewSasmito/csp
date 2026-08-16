@@ -1,4 +1,4 @@
-from csp import ts, PushMode
+from csp import PushMode, ts
 from csp.impl.wiring import input_adapter_def
 from csp.lib import _csvadapterimpl
 
@@ -43,6 +43,14 @@ class CsvAdapterManager:
             properties,
             push_mode=push_mode,
         )
+
+    def subscribe_all(
+        self,
+        ts_type,
+        field_map=None,
+        push_mode=PushMode.LAST_VALUE,
+    ):
+        return self.subscribe(ts_type, field_map, "", push_mode)  # Legacy API
 
     def _create(self, engine, memo):
         return _csvadapterimpl._csv_adapter_manager(engine, self._properties)

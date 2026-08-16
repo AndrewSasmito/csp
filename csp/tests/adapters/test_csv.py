@@ -30,6 +30,7 @@ class TestCSVReader(unittest.TestCase):
                 time_column="TIME",
                 symbol_column="SYMBOL",
                 delimiter="|",
+                time_format="YYYYMMDD hh:mm:ss",
             )
 
             # Struct
@@ -47,7 +48,7 @@ class TestCSVReader(unittest.TestCase):
             aapl_price = reader.subscribe(str, symbol="AAPL", field_map="PRICE")
 
             # all data
-            all = reader.subscribe(PriceQuantity)
+            all = reader.subscribe_all(PriceQuantity)
 
             csp.add_graph_output("aapl", aapl)
             csp.add_graph_output("ibm", ibm)
@@ -92,10 +93,7 @@ class TestCSVReader(unittest.TestCase):
 
     def test_starttime(self):
         reader = CsvAdapterManager(
-            self._filename,
-            time_column="TIME",
-            symbol_column="SYMBOL",
-            delimiter="|",
+            self._filename, time_column="TIME", symbol_column="SYMBOL", delimiter="|", time_format="YYYYMMDD hh:mm:ss"
         )
         aapl = reader.subscribe(str, symbol="AAPL", field_map="PRICE")
 
