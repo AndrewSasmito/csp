@@ -160,7 +160,7 @@ private:
     static constexpr nbit_type nbits() { return sizeof( value_type ) * 8; }
 
     template<typename U, std::enable_if_t<std::is_unsigned<U>::value, bool> = true>
-    static constexpr nbit_type log2( U n )           { return nbits<U>() - clz( n ) - 1; } //upcast to 32 bit to avoid truncation for log2
+    static constexpr nbit_type log2( U n )           { return nbits<U>() - clz( n ) - 1; }
 
     static constexpr node_type mask( nbit_type bitIndex )  { return ( node_type )1 << bitIndex; }
 
