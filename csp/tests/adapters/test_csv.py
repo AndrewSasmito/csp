@@ -7,15 +7,15 @@ from csp.adapters.csv import CsvAdapterManager
 
 
 class PriceQuantity(csp.Struct):
-    PRICE: str
-    SIZE: str
+    PRICE: float
+    SIZE: int
     SIDE: str
     SYMBOL: str
 
 
 class PriceQuantity2(csp.Struct):
-    price: str
-    quantity: str
+    price: float
+    quantity: int
     side: str
 
 
@@ -45,7 +45,7 @@ class TestCSVReader(unittest.TestCase):
             )
 
             # specific field
-            aapl_price = reader.subscribe(str, symbol="AAPL", field_map="PRICE")
+            aapl_price = reader.subscribe(float, symbol="AAPL", field_map="PRICE")
 
             # all data
             all = reader.subscribe_all(PriceQuantity)
@@ -67,26 +67,26 @@ class TestCSVReader(unittest.TestCase):
         self.assertEqual(
             [v[1] for v in result["aapl"]],
             [
-                PriceQuantity(PRICE="500.00", SIZE="100", SIDE="BUY", SYMBOL="AAPL"),
-                PriceQuantity(PRICE="400.00", SIZE="100", SIDE="BUY", SYMBOL="AAPL"),
-                PriceQuantity(PRICE="300.00", SIZE="200", SIDE="SELL", SYMBOL="AAPL"),
-                PriceQuantity(PRICE="200.00", SIZE="400", SIDE="BUY", SYMBOL="AAPL"),
+                PriceQuantity(PRICE=500.0, SIZE=100, SIDE="BUY", SYMBOL="AAPL"),
+                PriceQuantity(PRICE=400.0, SIZE=100, SIDE="BUY", SYMBOL="AAPL"),
+                PriceQuantity(PRICE=300.0, SIZE=200, SIDE="SELL", SYMBOL="AAPL"),
+                PriceQuantity(PRICE=200.0, SIZE=400, SIDE="BUY", SYMBOL="AAPL"),
             ],
         )
 
         self.assertEqual(
             [v[1] for v in result["aapl2"]],
             [
-                PriceQuantity2(price="500.00", quantity="100", side="BUY"),
-                PriceQuantity2(price="400.00", quantity="100", side="BUY"),
-                PriceQuantity2(price="300.00", quantity="200", side="SELL"),
-                PriceQuantity2(price="200.00", quantity="400", side="BUY"),
+                PriceQuantity2(price=500.0, quantity=100, side="BUY"),
+                PriceQuantity2(price=400.0, quantity=100, side="BUY"),
+                PriceQuantity2(price=300.0, quantity=200, side="SELL"),
+                PriceQuantity2(price=200.0, quantity=400, side="BUY"),
             ],
         )
 
         self.assertEqual(
             [v[1] for v in result["aapl_price"]],
-            ["500.00", "400.00", "300.00", "200.00"],
+            [500.0, 400.0, 300.0, 200.0],
         )
 
         self.assertEqual(len(result["all"]), 7)
@@ -95,7 +95,7 @@ class TestCSVReader(unittest.TestCase):
         reader = CsvAdapterManager(
             self._filename, time_column="TIME", symbol_column="SYMBOL", delimiter="|", time_format="YYYYMMDD hh:mm:ss"
         )
-        aapl = reader.subscribe(str, symbol="AAPL", field_map="PRICE")
+        aapl = reader.subscribe(float, symbol="AAPL", field_map="PRICE")
 
         # Exact hit
         res = csp.run(aapl, starttime=datetime(2020, 3, 3, 9, 30, 4))[0]

@@ -11,7 +11,7 @@ class CsvAdapterManager:
         delimiter=",",
         symbol_column="",
         has_header=True,
-        time_format=None,
+        time_format=None,  # Use YYYY, MM, DD, hh, mm, ss to represent date/time components
     ):
         self._properties = {
             "filename": filename,

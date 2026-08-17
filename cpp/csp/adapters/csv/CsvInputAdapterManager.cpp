@@ -1,12 +1,14 @@
 #include "csp/core/Exception.h"
+#include <array>
+#include <charconv>
 #include <csp/adapters/csv/CsvInputAdapterManager.h>
 #include <csp/adapters/utils/ValueDispatcher.h>
 #include <csp/engine/AdapterManager.h>
 #include <csp/engine/CspType.h>
 #include <csp/engine/Dictionary.h>
 #include <csp/engine/Struct.h>
-#include <array>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <iterator>
 #include <optional>
@@ -14,6 +16,7 @@
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <variant>
 #include <vector>
 
@@ -39,10 +42,16 @@ createParser(std::string_view format) {
     std::array<int, 6> data = {
         0, // year
         0, // month
-        1, // day
+        0, // day
         0, // hour
         0, // minute
         0  // second
+    };
+
+    auto requireLength = [&](std::string_view date, int idx, int width) {
+      CSP_TRUE_OR_THROW_RUNTIME(idx >= 0 && static_cast<size_t>(idx + width) <=
+                                                date.size(),
+                                "Invalid timestamp '" << date << "'");
     };
 
     auto d2 = [&](int idx) {
@@ -58,10 +67,13 @@ createParser(std::string_view format) {
       if (date_indices[i] == -1)
         continue;
 
-      if (i == 0)
+      if (i == 0) {
+        requireLength(date, date_indices[i], 4);
         data[i] = d4(date_indices[i]);
-      else
+      } else {
+        requireLength(date, date_indices[i], 2);
         data[i] = d2(date_indices[i]);
+      }
     }
 
     return DateTime(data[0], data[1], data[2], data[3], data[4], data[5]);
@@ -87,6 +99,8 @@ CsvInputAdapterManager::CsvInputAdapterManager(csp::Engine *engine,
   m_symbolColumnName = properties.get<std::string>("symbol_column", "");
 
   CSP_TRUE_OR_THROW_RUNTIME(m_timeColumn != "", "Time column can't be empty");
+  CSP_TRUE_OR_THROW_RUNTIME(!m_delimiter.empty(),
+                            "CSV delimiter cannot be empty");
 
   properties.tryGet("time_format", m_timeFormat);
 
@@ -182,6 +196,14 @@ void CsvInputAdapterManager::start(DateTime starttime, DateTime endtime) {
     m_columnNames = splitLine(headerLine, m_delimiter);
   }
 
+  // Ensure no duplicate column names
+  std::unordered_set<std::string> seen;
+
+  for (const auto &name : m_columnNames) {
+    CSP_TRUE_OR_THROW_RUNTIME(seen.insert(name).second,
+                              "Duplicate CSV column name: '" << name << "'");
+  }
+
   // Collect the set of columns any subscriber cares about
   std::set<std::string> neededColumns;
   bool needAllColumns = false;
@@ -250,6 +272,35 @@ void CsvInputAdapterManager::start(DateTime starttime, DateTime endtime) {
     m_row.clear();
 }
 
+static void setFieldFromCsv(StructPtr &s, const StructField &field,
+                            std::string_view value) {
+  switch (field.type()->type()) {
+  case CspType::Type::STRING:
+    field.setValue<std::string>(s.get(), std::string(value));
+    break;
+
+  case CspType::Type::INT64: {
+    int64_t x;
+    auto [p, ec] =
+        std::from_chars(value.data(), value.data() + value.size(), x);
+
+    CSP_TRUE_OR_THROW_RUNTIME(ec == std::errc{} &&
+                                  p == value.data() + value.size(),
+                              "Invalid int64: '" << value << "'");
+
+    field.setValue<int64_t>(s.get(), x);
+    break;
+  }
+
+  case CspType::Type::DOUBLE:
+    field.setValue<double>(s.get(), std::stod(std::string(value)));
+    break;
+
+  default:
+    CSP_THROW(TypeError, "Unsupported CSV type");
+  }
+}
+
 void CsvInputAdapterManager::bindSubscriberDispatchers() {
   // Column name -> header index (built once).
   std::unordered_map<std::string_view, size_t> colIndex;
@@ -278,7 +329,7 @@ void CsvInputAdapterManager::bindSubscriberDispatchers() {
         subscription.m_fieldSetters.push_back(
             [i, field](StructPtr &s,
                        const std::vector<std::string_view> &cols) {
-              field->setValue<std::string>(s.get(), std::string(cols[i]));
+              setFieldFromCsv(s, *field, cols[i]);
             });
       }
 
@@ -299,10 +350,29 @@ void CsvInputAdapterManager::bindSubscriberDispatchers() {
       auto tag = adapter->dataType()->type();
 
       if (tag == CspType::Type::STRING) {
-        // Only pure-string ticks are implementable without Python.
         sub.m_dispatch = [adapter,
                           idx](const std::vector<std::string_view> &cols) {
           adapter->pushTick<std::string>(std::string(cols[idx]));
+        };
+      } else if (tag == CspType::Type::INT64) {
+        sub.m_dispatch = [adapter,
+                          idx](const std::vector<std::string_view> &cols) {
+          int64_t value = 0;
+          auto [ptr, ec] = std::from_chars(
+              cols[idx].data(), cols[idx].data() + cols[idx].size(), value);
+
+          CSP_TRUE_OR_THROW_RUNTIME(
+              ec == std::errc{} && ptr == cols[idx].data() + cols[idx].size(),
+              "Failed to parse int64 CSV value '" << cols[idx] << "'");
+
+          adapter->pushTick<int64_t>(value);
+        };
+      } else if (tag == CspType::Type::DOUBLE) {
+        sub.m_dispatch = [adapter,
+                          idx](const std::vector<std::string_view> &cols) {
+          // std::from_chars not implemented for double types on Clang
+          double value = std::stod(std::string(cols[idx]));
+          adapter->pushTick<double>(value);
         };
       }
       // else: leave m_dispatch null;
@@ -341,7 +411,7 @@ void CsvInputAdapterManager::bindSubscriberDispatchers() {
         subscription.m_fieldSetters.push_back(
             [idx, field](StructPtr &s,
                          const std::vector<std::string_view> &cols) {
-              field->setValue<std::string>(s.get(), std::string(cols[idx]));
+              setFieldFromCsv(s, *field, cols[idx]);
             });
       }
 
